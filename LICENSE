@@ -1,4 +1,8 @@
-Copyright (c) 2024 <>< CNLohr
+MIT License
+
+Copyright (c) 2024 <>< CNLohr (All normal code)
+Copyright 2022 Alexey Kutepov <reximkut@gmail.com> (olive.c)
+stb_truetype + stb_image_write MIT license too.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,4 +24,3 @@ SOFTWARE.
 
 AudioLinkConsole is from llealloo (https://audiolink.dev/) And Public Domain
 
-stb_truetype + stb_image_write is either MIT or Public Domain (up to user)
