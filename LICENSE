@@ -1,11 +1,3 @@
-MIT License
-
-AudioLinkConsole is from llealloo (https://audiolink.dev/) And Public Domain
-
-stb_truetype + stb_image_write is either MIT or Public Domain (up to user)
-
-All non-library code is under the MIT License
-
 Copyright (c) 2024 <>< CNLohr
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -26,3 +18,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+AudioLinkConsole is from llealloo (https://audiolink.dev/) And Public Domain
+
+stb_truetype + stb_image_write is either MIT or Public Domain (up to user)
