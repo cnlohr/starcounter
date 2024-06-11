@@ -2,11 +2,11 @@
 
 gh repo list $1 -L 4000 --json name --jq '(map(keys) | add | unique) as $cols | map(. as $row | $cols | map($row[.])) as $rows | $cols, $rows[] | @tsv' | tail +2 > repolist.txt
 #curl https://api.github.com/repos/cnlohr/ch32v003fun/stargazers -H 'Accept: application/vnd.github.v3.star+json'
-set -x
+#set -x
 
 echo "Got repo list."
 
-rm -rf allstarlist.txt
+#rm -rf allstarlist.txt
 
 while read r; do
 	echo $r
@@ -16,12 +16,12 @@ while read r; do
 	do
 		gh api "repos/$1/$r/stargazers?per_page=100&page=$P" -H 'Accept: application/vnd.github.v3.star+json' | jq -r '.[] | [.starred_at] | @csv' > temp.txt
 		T=$(wc temp.txt  -l | cut -d' ' -f1)
-		echo $T
+		#echo $T
 
 		while read t; do
 			temp="${t%\"}"
 			temp="${temp#\"}"
-			echo -ne "$r," >> allstarlist.txt
+			echo -ne "$1/$r," >> allstarlist.txt
 			date -d $temp "+%s" >> allstarlist.txt
 		done < temp.txt
 

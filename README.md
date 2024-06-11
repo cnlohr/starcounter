@@ -1,13 +1,15 @@
 # starcounter
 
-
 Uses `gh` github cli to retrieve detailed data about stars from all of a user's repositories.
+
+Then turns it into a pretty video.
+
 
 
 ### Requirements
 
 ```
-sudo apt-get install gh jq
+sudo apt-get install gh jq ffmpeg
 ```
 
 ```
@@ -20,9 +22,20 @@ gh auth login
 Usage:
 
 ```
+rm -rf allstarlist.txt
 ./allstar_gen.sh {username}
-./parseallstars.sh
+./allstar_gen.sh {username}
+make video.mp4
 ```
 
-That outputs "starsbydate.txt"
+Which will output `video.mp4`
+
+Optionally: `./parseallstars.sh` if just one user to make a CSV to `starsbydate.txt`.
+
+If you wish to change the width/height, you can edit it in `starslidegen.c` here:
+
+```
+#define WINDOWW 1920
+#define WINDOWH 1080
+```
 

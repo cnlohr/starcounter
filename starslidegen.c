@@ -1,15 +1,21 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#define GIFENC_IMPLEMENTATION
-#include "gifenc.h"
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
+#define CNFGRASTERIZER
 #define CNFG_IMPLEMENTATION
 #include "rawdraw_sf.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+#define EXTRADRAWUTILS_IMPLEMENTATION
+#include "extradrawutils.h"
 
 void HandleKey( int keycode, int bDown ) { }
 void HandleButton( int x, int y, int button, int bDown ) { }
@@ -17,11 +23,33 @@ void HandleMotion( int x, int y, int mask ) { }
 int HandleDestroy() { return 0; }
 
 char ** reponames = 0;
+char ** reponames_user = 0;
+char ** reponames_repo = 0;
 int numreponames = 0;
 
-#define WINDOWW 960
+#define WINDOWW 1920
 #define WINDOWH 1080
+
+#define CONTINUE_PAST_FRAMES 200
+#define GLYPHH 36
+
+#define RHEIGHT ((GLYPHH)+1)
+#define XMARGIN 300
+#define RIGHTMARGIN 100
+#define XOFS 10
+#define YOFS 10
+#define RWIDTH (w-XOFS*2 - XMARGIN - RIGHTMARGIN)
+#define RMARGINA XOFS
+
+#define TEXTYOFS (GLYPHH/4)
+#define MAXGLYPHS 127
+
+#define MAX_COLUMNS 6
+uint32_t usercolors[MAX_COLUMNS] = { 0xff0000ff, 0x0000ffff, 0x00ff00ff, 0xffff00ff, 0xff00ffff, 0x00ffffff };
+
 uint32_t framebuffer[WINDOWW*WINDOWH];
+
+uint32_t palette[1024];
 
 struct allstarentry
 {
@@ -54,8 +82,36 @@ int repocompare( const struct repoentry_sort * a, struct repoentry_sort * b )
 
 int main( int argc, const char ** argv )
 {
+	double frametime = 24*3600;
+
 	int i;
 	char buff[1024];
+
+	int r = LoadFont();
+
+	if( r < 0 ) return r;
+
+	mkdir( "framedata", 0777 );
+
+	// Make some random palette colors.
+	srand( 1 );
+	for( i = 0; i < sizeof(palette)/sizeof(palette[0]); i++ )
+	{
+		int r = rand()%8192;
+		int g = rand()%8192;
+		int b = rand()%8192;
+		int mc = r;
+		if( mc > g ) mc = g;
+		if( mc > b ) mc = b;
+		r -= mc; g -= mc; b -= mc;
+		float rm = 255.0 / sqrtf(r*r+g*g+b*b);
+		r *= rm; g *= rm; b *= rm;
+		palette[i] = (r<<24) | (g<<16) | (b<<8) | 0xff;
+	}
+
+	CNFGSetup( "starcounter", WINDOWW, WINDOWH );
+
+	CNFGBGColor = 0x121212ff;
 
 	if( argc < 2 )
 	{
@@ -75,6 +131,7 @@ int main( int argc, const char ** argv )
 	double starttime = 0;
 	double endtime = 0;
 
+	// Read in data.
 	while( !feof( f ) )
 	{
 		char * s = fgets( buff, sizeof(buff), f );
@@ -96,7 +153,14 @@ int main( int argc, const char ** argv )
 		{
 			numreponames++;
 			reponames = realloc( reponames, sizeof( reponames[0] ) * numreponames );
+			reponames_user = realloc( reponames_user, sizeof( reponames_user[0] ) * numreponames );
+			reponames_repo = realloc( reponames_repo, sizeof( reponames_user[0] ) * numreponames );
 			reponames[numreponames-1] = strdup( s );
+			char * mid = strchr( s, '/' );
+			*mid = 0;
+			mid++;
+			reponames_user[numreponames-1] = strdup( s );
+			reponames_repo[numreponames-1] = strdup( mid );
 		}
 		numstars++;
 		allstars = realloc( allstars, sizeof( allstars[0] ) * numstars );
@@ -107,54 +171,281 @@ int main( int argc, const char ** argv )
 	}
 	fclose( f );
 
-	starttime = floor( starttime / (3600*24) ) * (3600*24);
+	starttime = floor( starttime / (frametime) ) * (frametime);
 
 	struct repoentry res[numreponames];
 	memset( res, 0, sizeof( res ) );
 
 	double ttime;
-	for( ttime = starttime; ttime <= endtime; ttime += 3600*24 )
+	int framenumber = 0;
+	int columns = 1;
+	const char * colnames[MAX_COLUMNS];
+
+	colnames[0] = reponames_user[0];
+
+	// Develop column names
+	for( i = 1; i < numreponames; i++ )
 	{
+		const char * user = reponames_user[i];
+		int j;
+		for( j = 0; j < columns; j++ )
+		{
+			if( strcmp( user, colnames[j] ) == 0 )
+				break;
+		}
+
+		if( j == columns )
+		{
+			if( columns+1 >= MAX_COLUMNS )
+			{
+				fprintf( stderr, "Error: too many users\n" );
+				exit( -15 );
+			}
+			colnames[columns++] = user;
+		}
+	}
+
+	// Figure out overall user max.
+	int usercombmaxstars_total[columns];
+	memset( usercombmaxstars_total, 0, sizeof( usercombmaxstars_total ) );
+	int usermaxstars_total = 0;
+	for( i = 0; i < numstars; i++ )
+	{
+		struct allstarentry * e = allstars + i;
+		res[e->repoid].count++;
+		int col;
+		for( col = 0; col < columns; col++ )
+		{
+			if( strcmp( reponames_user[e->repoid], colnames[col] ) == 0 )
+			{
+				usercombmaxstars_total[col]++;
+				if( usercombmaxstars_total[col] > usermaxstars_total )
+					usermaxstars_total = usercombmaxstars_total[col];
+			}
+		}
+	}
+
+	int expframenumbers = (endtime - starttime) / frametime + 1;
+	int datapoints[expframenumbers][columns];
+	memset( datapoints, 0, sizeof( datapoints ) );
+
+	// Continue past the end, to let everything stabilize.
+	endtime += CONTINUE_PAST_FRAMES*(frametime);
+
+	for( ttime = starttime; ttime <= endtime; ttime += frametime )
+	{
+		// Allow user to exit.
+		if( !CNFGHandleInput() ) break;
+
 		struct repoentry_sort repsort[numreponames];
+		short tw,h;
+		char cts[1024]; // Temp string for sprintf'ing into.
+
+		CNFGGetDimensions( &tw, &h );
+		CNFGClearFrame();
+		short w = tw / columns;
+
+		// Compute Max Stars (total)
+		int maxstars = 0;
+		int usercombmaxstars[columns];
+		memset( usercombmaxstars, 0, sizeof( usercombmaxstars ) );
+		int usermaxstars = 0;
 
 		for( i = 0; i < numreponames; i++ )
 		{
 			res[i].count = 0;
 			res[i].repid = i;
-			repsort[i].count = 0;
-			repsort[i].repid = i;
 		}
-
 		for( i = 0; i < numstars; i++ )
 		{
 			struct allstarentry * e = allstars + i;
 			if( e->startime <= ttime )
 			{
 				res[e->repoid].count++;
-				repsort[e->repoid].count++;
+				int col;
+				for( col = 0; col < columns; col++ )
+				{
+					if( strcmp( reponames_user[e->repoid], colnames[col] ) == 0 )
+					{
+						usercombmaxstars[col]++;
+						if( usercombmaxstars[col] > usermaxstars )
+							usermaxstars = usercombmaxstars[col];
+					}
+				}
+			}
+		}
+		for( i = 0; i < numreponames; i++ )
+		{
+			if( res[i].count > maxstars ) maxstars = res[i].count;
+		}
+
+		// Iterate per user.
+		int col;
+		for( col = 0; col < columns; col++ )
+		{
+			int cxo = col * w;
+
+			for( i = 0; i < numreponames; i++ )
+			{
+				res[i].count = 0;
+				res[i].repid = i;
+				repsort[i].count = 0;
+				repsort[i].repid = i;
+			}
+
+			int tstars = 0;
+
+			for( i = 0; i < numstars; i++ )
+			{
+				struct allstarentry * e = allstars + i;
+				if( strcmp( reponames_user[e->repoid], colnames[col] ) != 0 )
+				{
+					continue;
+				}
+				if( e->startime <= ttime )
+				{
+					res[e->repoid].count++;
+					repsort[e->repoid].count++;
+					tstars++;
+				}
+			}
+
+			// Only compute up to the expected end.
+			if( framenumber < expframenumbers )
+				datapoints[framenumber][col] = tstars;
+
+			// Draw Graph
+			float graphstartx = tw/3 + 10 + XOFS;
+			float graphendx   = tw - XOFS;
+			float graphstarty = h - 100;
+			float graphendy   = h * 1 / 3;
+			int lf = 0;
+			for( lf = 1; lf < framenumber; lf++ )
+			{
+				if( lf >= expframenumbers ) break;
+
+				CNFGColor( usercolors[col] );
+				int ty0 = datapoints[lf-1][col] + (1 - col);
+				int ty1 = datapoints[lf][col] + (1 - col );
+
+				float x0 = lf    * (float)( graphendx - graphstartx ) / expframenumbers + graphstartx;
+				float y0 = ty0   * (float)( graphendy - graphstarty ) / usermaxstars_total + graphstarty;
+				float x1 = (lf+1)* (float)( graphendx - graphstartx ) / expframenumbers + graphstartx;
+				float y1 = ty1   * (float)( graphendy - graphstarty ) / usermaxstars_total + graphstarty;
+				
+				CNFGTackSegment( x0, y0, x1, y1 );
+				CNFGTackSegment( x0, y0+1, x1, y1+1 );
+				CNFGTackSegment( x0+1, y0, x1+1, y1 );
+				CNFGTackSegment( x0+1, y0+1, x1+1, y1+1 );
+			}
+
+			// Sort the repositories.
+			qsort( repsort, numreponames, sizeof( repsort[0] ), (int(*)(const void*,const void*))repocompare );
+
+			memset( framebuffer, 0, sizeof( framebuffer ) );
+
+			float strwidth = StrWidth( colnames[col], 0, 0, GLYPHH );
+			DrawStr( colnames[col], XMARGIN - strwidth + cxo, YOFS + TEXTYOFS, GLYPHH );
+
+			if( usermaxstars )
+			{
+				if( columns == 1 )
+					sprintf( cts, "%d", tstars );
+				else
+					sprintf( cts, "%d stars", tstars );
+				float tlen = StrWidth( cts, 0, 0, GLYPHH );
+				float x = XOFS + XMARGIN + cxo;
+				float y = YOFS + ( -1 * RHEIGHT + 0.5 ) + RHEIGHT;
+				float rw = (float)( RWIDTH ) * usercombmaxstars[col] / (usermaxstars);
+				float rh = RHEIGHT - 4;
+
+				CNFGColor( 0xffffffff );
+				DrawStr( cts, x + rw + RMARGINA, YOFS + TEXTYOFS, GLYPHH );
+
+				CNFGTackRectangle( x, y, x+rw, y+rh );
+				CNFGColor( usercolors[col] );
+				CNFGTackRectangle( x+1, y+1, x+rw-1, y+rh-1 );
+
+				if( columns == 1 )
+				{
+					sprintf( cts, "stars" );
+					CNFGColor( 0x000000ff );
+					float tx = x + rw + RMARGINA;
+					float ty = YOFS + TEXTYOFS;
+					int strwidth = StrWidth( cts, XMARGIN + cxo, ty, GLYPHH );
+					DrawStr( cts, x + rw - RMARGINA - strwidth, ty, GLYPHH );
+				}
+			}
+
+			int validpl = 0;
+			for( i = 0; i < numreponames; i++ )
+			{
+				int rid = repsort[i].repid;
+				struct repoentry * e = res + rid;
+				if( strcmp( reponames_user[e->repid], colnames[col] ) != 0 )
+				{
+					continue;
+				}
+				e->targetplace = validpl;
+				if( e->count == 0 && repsort[i].count != 0 )
+					e->place = e->targetplace;
+				e->count = repsort[i].count;
+				double placediff = e->targetplace - e->place;
+				e->place += placediff * 0.06;
+
+				if( e->count == 0 ) continue;
+				validpl++;
+
+				float x = XOFS + XMARGIN + cxo;
+				float y = YOFS + ( e->place * RHEIGHT + 0.5 ) + RHEIGHT;
+				float rw = (float)RWIDTH * e->count / (maxstars);
+				float rh = RHEIGHT - 4;
+
+				CNFGColor( 0xffffffff );
+				CNFGTackRectangle( x, y, x+rw, y+rh );
+				CNFGColor( palette[rid] );
+				CNFGTackRectangle( x+1, y+1, x+rw-1, y+rh-1 );
+				//printf( "%d %d %d %d\n", x+1, y+1, x+rw-1, y+rh-1 );
+				snprintf( cts, sizeof( cts ), "%d", e->count );
+				int strwidth = StrWidth( reponames_repo[e->repid], XMARGIN + cxo, y + TEXTYOFS, GLYPHH );
+				CNFGColor( 0xffffffff );
+				DrawStr( reponames_repo[e->repid], XMARGIN - strwidth + cxo, y + TEXTYOFS, GLYPHH );
+				DrawStr( cts, x+rw+RMARGINA, y + TEXTYOFS, GLYPHH );
 			}
 		}
 
-		qsort( repsort, numreponames, sizeof( repsort[0] ), (int(*)(const void*,const void*))repocompare );
 
-		memset( framebuffer, 0, sizeof( framebuffer ) );
+		CNFGColor( 0xffffffff );
+		time_t timer = ttime;
+		static struct tm * tm_info;
+		// Stop updating date at end.
+		if( framenumber < expframenumbers )
+			tm_info = gmtime(&timer);
+		strftime( cts, sizeof( cts ), "%Y-%m-%d", tm_info);
+		int tlen = StrWidth( cts, tw - 0 - RMARGINA, h - TEXTYOFS*4-RMARGINA, GLYPHH*2 );
+		DrawStr( cts, tw - tlen - RMARGINA, h - TEXTYOFS*4-RMARGINA, GLYPHH*2 );
 
-		int i;
-		for( i = 0; i < numreponames; i++ )
-		{
-			struct repoentry * e = res + reposort[i].repid;
-			e->targetplace = i;
-			if( e->count == 0 && reposort[i].count != 0 )
-				e->place = e->targetplace;
-			e->count = reposort[i].count;
-			double placediff = e->targetplace - e->place;
-			e->place += placediff * 0.01;
+		// Draw starcounter url, but shadowed.
+		snprintf( cts, sizeof( cts ), "https://github.com/cnlohr/starcounter" );
+		int xo, yo;
+		CNFGColor( 0x000000ff );
+		for( yo = -1; yo < 2; yo++ )
+		for( xo = -1; xo < 2; xo++ )
+			DrawStr( cts, RMARGINA + xo, h-TEXTYOFS-RMARGINA + yo, GLYPHH/2 );
+		CNFGColor( 0xffffffff );
+		DrawStr( cts, RMARGINA, h-TEXTYOFS-RMARGINA, GLYPHH/2 );
 
-			
-		}
 
-		
-		printf( "\n" );
+		// Swap window buffers
+		CNFGSwapBuffers();
+
+		// Output bitmap (or can be png)
+		for( i = 0; i < tw*h; i++ )
+			CNFGBuffer[i] |= 0xff000000;
+		sprintf( cts, "framedata/%06d.bmp", framenumber );
+		stbi_write_bmp( cts, tw, h, 4, CNFGBuffer);
+
+		framenumber++;
 	}
 
 
