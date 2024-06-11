@@ -232,6 +232,12 @@ int main( int argc, const char ** argv )
 	// Continue past the end, to let everything stabilize.
 	endtime += CONTINUE_PAST_FRAMES*(frametime);
 
+	FILE * fAudio = fopen( "audio.dat", "wb" );
+	float audiolast = 0;
+	double audiophase = 0;
+	double audioticksaccum = 0;
+	int laststars = 0;
+
 	for( ttime = starttime; ttime <= endtime; ttime += frametime )
 	{
 		// Allow user to exit.
@@ -250,12 +256,14 @@ int main( int argc, const char ** argv )
 		int usercombmaxstars[columns];
 		memset( usercombmaxstars, 0, sizeof( usercombmaxstars ) );
 		int usermaxstars = 0;
+		int current_total_stars = 0;
 
 		for( i = 0; i < numreponames; i++ )
 		{
 			res[i].count = 0;
 			res[i].repid = i;
 		}
+
 		for( i = 0; i < numstars; i++ )
 		{
 			struct allstarentry * e = allstars + i;
@@ -272,8 +280,10 @@ int main( int argc, const char ** argv )
 							usermaxstars = usercombmaxstars[col];
 					}
 				}
+				current_total_stars++;
 			}
 		}
+
 		for( i = 0; i < numreponames; i++ )
 		{
 			if( res[i].count > maxstars ) maxstars = res[i].count;
@@ -446,6 +456,21 @@ int main( int argc, const char ** argv )
 		stbi_write_bmp( cts, tw, h, 4, CNFGBuffer);
 
 		framenumber++;
+
+		int diff = current_total_stars - laststars;
+		laststars = current_total_stars;
+		audioticksaccum += diff;
+		for( i = 0; i < 800; i++ )
+		{
+			audiophase += audioticksaccum * 0.0002;
+			if( audiophase >= 1.0 )
+			{
+				audiophase--;
+				audioticksaccum--;
+			}
+			audiolast = audiophase * 0.05 - 0.025;
+			fwrite( &audiolast, 4, 1, fAudio );
+		}
 	}
 
 

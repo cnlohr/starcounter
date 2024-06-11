@@ -6,11 +6,11 @@ LDFLAGS:=-lX11 -lm
 starslidegen : starslidegen.c
 	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-framedata/000000.png : starslidegen allstarlist.txt
+framedata/000000.bmp : starslidegen allstarlist.txt
 	./starslidegen allstarlist.txt
 
-video.mp4 : framedata/000000.png
-	ffmpeg -f image2 -framerate 60 -i framedata/%06d.bmp -vcodec libx264 -crf 20 video.mp4
+video.mp4 : framedata/000000.bmp
+	ffmpeg -f image2 -framerate 60 -i framedata/%06d.bmp -f s32le -ar 48000 -i audio.dat -vcodec libx264 -crf 20 -c:a aac video.mp4
 
 allstarlist.txt :
 	echo "You have to execute allstar_gen.sh for each user, i.e."
