@@ -2,7 +2,7 @@
 
 Uses `gh` github cli to retrieve detailed data about stars from all of a user's repositories.
 
-Then turns it into a pretty video.
+Then turns it into a pretty video.  (Linux only, unless you really want to install ffmpeg and bash on Windows)
 
 [![YT Video](https://img.youtube.com/vi/oONCBe2fzv4/hqdefault.jpg)](https://youtu.be/oONCBe2fzv4)
 
