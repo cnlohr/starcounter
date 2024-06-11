@@ -17,7 +17,6 @@ sudo apt-get install gh jq ffmpeg
 gh auth login
 ```
 
-
 ### Operation
 
 Usage:
@@ -40,3 +39,4 @@ If you wish to change the width/height, you can edit it in `starslidegen.c` here
 #define WINDOWH 1080
 ```
 
+**NOTE**: Because we are using bmp's it's fast, but longer runs could use in upwards of 40GB of intermediate files.
