@@ -10,7 +10,7 @@ Then turns it into a pretty video.  (Linux only, unless you really want to insta
 ### Requirements
 
 ```
-sudo apt-get install gh jq ffmpeg
+sudo apt-get install gh jq ffmpeg build-essential
 ```
 
 ```
@@ -22,7 +22,7 @@ gh auth login
 Usage:
 
 ```
-rm -rf allstarlist.txt
+make clobber
 ./allstar_gen.sh {username}
 ./allstar_gen.sh {username}
 make video.mp4

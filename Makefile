@@ -17,7 +17,7 @@ allstarlist.txt :
 	echo "$ ./allstar_gen.sh cnlohr"
 	echo "$ ./allstar_gen.sh tsoding"
 
-clobber :
+clobber : clean
 	rm -rf allstarlist.txt
 
 clean :
