@@ -4,7 +4,7 @@ Uses `gh` github cli to retrieve detailed data about stars from all of a user's 
 
 Then turns it into a pretty video.
 
-[![YT Video](https://img.youtube.com/vi/oONCBe2fzv4/hqdefault.jpg)](https://www.youtube.com/embed/oONCBe2fzv4)
+[![YT Video](https://img.youtube.com/vi/oONCBe2fzv4/hqdefault.jpg)](https://www.youtube.com/oONCBe2fzv4)
 
 
 ### Requirements
