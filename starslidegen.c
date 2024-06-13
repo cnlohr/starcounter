@@ -34,12 +34,13 @@ char ** reponames_user = 0;
 char ** reponames_repo = 0;
 int numreponames = 0;
 
-#define CONTINUE_PAST_FRAMES 200
+#define CONTINUE_PAST_FRAMES 120
 #define GLYPHH 36
 
 #define RHEIGHT ((GLYPHH)+1)
 #define XMARGIN 300
 #define RIGHTMARGIN 100
+#define TOPMARGIN 15
 #define XOFS 10
 #define YOFS 10
 #define RWIDTH (w-XOFS*2 - XMARGIN - RIGHTMARGIN)
@@ -81,6 +82,103 @@ int repocompare( const struct repoentry_sort * a, struct repoentry_sort * b )
 	if( a->count < b->count ) return 1;
 	return strcmp( reponames[a->repid], reponames[b->repid] );
 }
+
+
+///////////////////////////////////////////////////////////////////////////////////
+// Sound Effects
+
+#define MAX_CHIRPS 1024
+
+struct tick_stat
+{
+	int active;
+	int column;
+	float place;
+	float foffset;
+};
+
+double tick_count_running[MAX_COLUMNS];
+struct tick_stat ticks[MAX_CHIRPS];
+
+float TickSFX( struct tick_stat * c )
+{
+	if( !c->active ) return 0;
+	const int impact_length = 5000;
+
+	// Creates a cute impulse.
+	float attack = (c->place/300);
+	if( attack > 1.0 ) attack = 1.0;
+	float decay =  pow(1 - c->place / impact_length, 3);
+
+	float fCore = c->foffset * (( 9 + c->column * 4 ) ) * c->place / ( c->place + 1000 );
+
+	float ret = sin( 6.28 * fCore ) * decay * attack;  // Fundamental
+	ret += sin( 3.0*6.28 *  fCore ) * decay * attack * .8;  // 3rd overtone
+	ret += sin( 5.0*6.28 *  fCore ) * decay * attack * .6; // 5th overtone.
+	ret += sin( 9.0*6.28 *  fCore ) * decay * attack * .5; // 9th overtone.
+	ret += sin( 12.0*6.28 * fCore ) * decay * attack * .4; // 12th overtone.
+	ret += sin( 15.0*6.28 * fCore ) * decay * attack * .3; // 15th overtone.
+	ret += sin( 17.0*6.28 * fCore ) * decay * attack * .2; // 17th overtone.
+
+	c->place++;
+
+	if( c->place > impact_length ) c->active = 0;
+	return ret;
+}
+
+void AddTick( int column )
+{
+	int i;
+	for( i = 0; i < MAX_CHIRPS; i++ )
+	{
+		struct tick_stat * t = &ticks[i];
+		if( t->active ) continue;
+		t->active = 1;
+		t->place = 0;
+		t->foffset = ((rand()%1000)/1000.0)+1.0;
+		t->column = column;
+		break;
+	}
+}
+
+void AddAudioFrames( FILE * fAudio, int nAudioSamples, int * diffs, int columns )
+{
+	int i;
+	for( i = 0; i < columns; i++ )
+	{
+		tick_count_running[i] += diffs[i];
+	}
+
+	for( i = 0; i < nAudioSamples; i++ )
+	{
+		int j;
+
+		for( j = 0; j < columns; j++ )
+		{
+			// Randomly speckle the pops.
+			double pressure = log( tick_count_running[j] + 1 );
+			if( pressure > (rand()%1000)/5.0 )
+			{
+				AddTick( j );
+				tick_count_running[j]--;
+			}
+		}
+
+		float fSample = 0.0;
+
+		for( j = 0; j < MAX_CHIRPS; j++ )
+		{
+			if( ticks[j].active )
+				fSample += TickSFX( &ticks[j] ) * .03;
+		}
+
+		if( fSample > 1.0 ) fSample = 1.0;
+		if( fSample <-1.0 ) fSample =-1.0;
+		fwrite( &fSample, 4, 1, fAudio );
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////
 
 int main( int argc, const char ** argv )
 {
@@ -295,8 +393,8 @@ int main( int argc, const char ** argv )
 	FILE * fAudio = fopen( "audio.dat", "wb" );
 	float audiolast = 0;
 	double audiophase = 0;
-	double audioticksaccum = 0;
-	int laststars = 0;
+	int laststars[columns];
+	memset( laststars, 0, sizeof( laststars ) );
 
 	framenumber = 0;
 
@@ -321,7 +419,6 @@ int main( int argc, const char ** argv )
 		int usercombmaxstars[columns];
 		memset( usercombmaxstars, 0, sizeof( usercombmaxstars ) );
 		int usermaxstars = 0;
-		int current_total_stars = 0;
 
 		for( i = 0; i < numreponames; i++ )
 		{
@@ -345,7 +442,6 @@ int main( int argc, const char ** argv )
 							usermaxstars = usercombmaxstars[col];
 					}
 				}
-				current_total_stars++;
 			}
 		}
 
@@ -417,7 +513,7 @@ int main( int argc, const char ** argv )
 			qsort( repsort, numreponames, sizeof( repsort[0] ), (int(*)(const void*,const void*))repocompare );
 
 			float strwidth = StrWidth( colnames[col], 0, 0, GLYPHH );
-			DrawStr( oc, colnames[col], XMARGIN - strwidth + cxo, YOFS + TEXTYOFS, GLYPHH, usercolors[col] );
+			DrawStr( oc, colnames[col], XMARGIN - strwidth + cxo, YOFS + TEXTYOFS + TOPMARGIN / 2, GLYPHH, usercolors[col] );
 
 			if( usermaxstars )
 			{
@@ -435,16 +531,16 @@ int main( int argc, const char ** argv )
 					sprintf( cts, "%d stars", tstars );
 				float tlen = StrWidth( cts, 0, 0, GLYPHH );
 				float x = XOFS + XMARGIN + cxo;
-				float y = YOFS + ( -1 * RHEIGHT + 0.5 ) + RHEIGHT;
+				float y = YOFS + ( -1 * RHEIGHT + 0.5 ) + RHEIGHT + TOPMARGIN / 2;
 
-				DrawStr( oc, cts, x + rw + RMARGINA, YOFS + TEXTYOFS, GLYPHH, 0xffffffff );
+				DrawStr( oc, cts, x + rw + RMARGINA, YOFS + TEXTYOFS + TOPMARGIN/2, GLYPHH, 0xffffffff );
 				DrawPrettyRect( oc, x, y, ((int)rw), rh, 0xff222222, star_time_series[col], star_time_series_diff[col], framenumber, expframenumbers, 0 );
 
 				if( starsinblack )
 				{
 					sprintf( cts, "stars" );
 					float tx = x + rw + RMARGINA;
-					float ty = YOFS + TEXTYOFS;
+					float ty = YOFS + TEXTYOFS + TOPMARGIN/2;
 					int strwidth = StrWidth( cts, XMARGIN + cxo, ty, GLYPHH );
 					DrawStr( oc, cts, x + ((int)rw) - RMARGINA - strwidth, ty, GLYPHH, 0xffffffff );
 				}
@@ -470,7 +566,7 @@ int main( int argc, const char ** argv )
 				validpl++;
 
 				float x = XOFS + XMARGIN + cxo;
-				float y = YOFS + ( e->place * RHEIGHT + 0.5 ) + RHEIGHT;
+				float y = YOFS + ( e->place * RHEIGHT + 0.5 ) + RHEIGHT + TOPMARGIN;
 				float rw = (float)RWIDTH * e->count / (maxstars);
 				float rh = RHEIGHT - 4;
 
@@ -535,23 +631,15 @@ int main( int argc, const char ** argv )
 
 		framenumber++;
 
-		int diff = current_total_stars - laststars;
-		laststars = current_total_stars;
-		audioticksaccum += diff;
-		for( i = 0; i < 800; i++ )
+		int diff[columns];
+		for( i = 0; i < columns; i++ )
 		{
-			audiophase += audioticksaccum * 0.0012;
-			if( audiophase >= 1.0 )
-			{
-				audiophase--;
-				audioticksaccum--;
-			}
-			audiolast = 
-				//audiophase > 0.5 ? 0.1 : -0.1;
-				audiophase * 0.2 - 0.1;
-				//sin(audiophase*3.14159*2.0)*.01;//
-			fwrite( &audiolast, 4, 1, fAudio );
+			diff[i] = usercombmaxstars[i] - laststars[i];
+			laststars[i] = usercombmaxstars[i];
 		}
+
+		// 48000/60
+		AddAudioFrames( fAudio, 48000/60, diff, columns );
 	}
 
 

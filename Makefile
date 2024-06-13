@@ -2,7 +2,7 @@ all : starslidegen
 
 CFLAGS:=-g -O2
 LDFLAGS:=-lX11 -lm
-START_FRAME:=601
+START_FRAME:=721
 
 starslidegen : starslidegen.c
 	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
@@ -11,7 +11,7 @@ framedata/000000.bmp : starslidegen allstarlist.txt
 	./starslidegen allstarlist.txt
 
 video.mp4 : framedata/000000.bmp
-	ffmpeg -f image2 -start_number $(START_FRAME) -framerate 60 -i framedata/%06d.bmp -f f32le -ss 10.0 -ar 48000 -i audio.dat -vcodec libx264 -crf 20 -c:a aac video.mp4
+	ffmpeg -f image2 -start_number $(START_FRAME) -framerate 60 -i framedata/%06d.bmp -f f32le -ss 12.0 -ar 48000 -i audio.dat -vcodec libx264 -crf 21 -c:a aac video.mp4
 
 allstarlist.txt :
 	echo "You have to execute allstar_gen.sh for each user, i.e."
