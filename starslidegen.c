@@ -178,7 +178,7 @@ void AddAudioFrames( FILE * fAudio, int nAudioSamples, int * diffs, int columns 
 
 		for( j = 0; j < 2; j++ )
 		{
-			fSample[j] *= .03;
+			fSample[j] *= .05;
 			if( fSample[j] > 1.0 ) fSample[j] = 1.0;
 			if( fSample[j] <-1.0 ) fSample[j] =-1.0;
 		}
