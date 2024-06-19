@@ -94,15 +94,16 @@ struct tick_stat
 	int active;
 	int column;
 	float place;
+	float pan;
 	float foffset;
 };
 
 double tick_count_running[MAX_COLUMNS];
 struct tick_stat ticks[MAX_CHIRPS];
 
-float TickSFX( struct tick_stat * c )
+void TickSFX( struct tick_stat * c, float * fsamps )
 {
-	if( !c->active ) return 0;
+	if( !c->active ) return;
 	const int impact_length = 5000;
 
 	// Creates a cute impulse.
@@ -110,7 +111,7 @@ float TickSFX( struct tick_stat * c )
 	if( attack > 1.0 ) attack = 1.0;
 	float decay =  pow(1 - c->place / impact_length, 3);
 
-	float fCore = c->foffset * (( 9 + c->column * 4 ) ) * c->place / ( c->place + 1000 );
+	float fCore = c->foffset * (( 9 + c->column * 2 ) ) * c->place / ( c->place + 1000 );
 
 	float ret = sin( 6.28 * fCore ) * decay * attack;  // Fundamental
 	ret += sin( 3.0*6.28 *  fCore ) * decay * attack * .8;  // 3rd overtone
@@ -123,7 +124,9 @@ float TickSFX( struct tick_stat * c )
 	c->place++;
 
 	if( c->place > impact_length ) c->active = 0;
-	return ret;
+	fsamps[0] = ret * ( 0.5 + c->pan );
+	fsamps[1] = ret * ( 0.5 - c->pan );
+	//return ret;
 }
 
 void AddTick( int column )
@@ -135,6 +138,7 @@ void AddTick( int column )
 		if( t->active ) continue;
 		t->active = 1;
 		t->place = 0;
+		t->pan = -column * 0.6 + .3;
 		t->foffset = ((rand()%1000)/1000.0)+1.0;
 		t->column = column;
 		break;
@@ -164,17 +168,21 @@ void AddAudioFrames( FILE * fAudio, int nAudioSamples, int * diffs, int columns 
 			}
 		}
 
-		float fSample = 0.0;
+		float fSample[2] = { 0.0 };
 
 		for( j = 0; j < MAX_CHIRPS; j++ )
 		{
 			if( ticks[j].active )
-				fSample += TickSFX( &ticks[j] ) * .03;
+				TickSFX( &ticks[j], fSample );
 		}
 
-		if( fSample > 1.0 ) fSample = 1.0;
-		if( fSample <-1.0 ) fSample =-1.0;
-		fwrite( &fSample, 4, 1, fAudio );
+		for( j = 0; j < 2; j++ )
+		{
+			fSample[j] *= .05;
+			if( fSample[j] > 1.0 ) fSample[j] = 1.0;
+			if( fSample[j] <-1.0 ) fSample[j] =-1.0;
+		}
+		fwrite( fSample, 4, 2, fAudio );
 	}
 }
 
