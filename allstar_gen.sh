@@ -21,8 +21,8 @@ while read r; do
 		while read t; do
 			temp="${t%\"}"
 			temp="${temp#\"}"
-			echo -ne "$1/$r," >> allstarlist.txt
-			date -d $temp "+%s" >> allstarlist.txt
+			echo -ne "$1/$r," >> $2
+			date -d $temp "+%s" >> $2
 		done < temp.txt
 
 		echo $P

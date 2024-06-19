@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cat allstarlist.txt | sed -e "s/,/ /g" | sort -k2 > temp.txt
+cat $1 | sed -e "s/,/ /g" | sort -k2 > temp.txt
 
 ltime=0
 stars=1
