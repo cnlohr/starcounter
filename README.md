@@ -9,7 +9,7 @@ Features usage of:
  * olive.c
  * rawdraw_sf.h
 
-[![YT Video](https://img.youtube.com/vi/oONCBe2fzv4/hqdefault.jpg)](https://youtu.be/oONCBe2fzv4)
+[![YT Video](https://img.youtube.com/vi/sOhyY2s_VT4/hqdefault.jpg)](https://youtu.be/sOhyY2s_VT4)
 
 
 ### Requirements
