@@ -15,8 +15,9 @@ video.mp4 : framedata/000000.bmp
 
 allstarlist.txt :
 	echo "You have to execute allstar_gen.sh for each user, i.e."
-	echo "$ ./allstar_gen.sh cnlohr"
-	echo "$ ./allstar_gen.sh tsoding"
+	echo "$ rm allstarlist.txt"
+	echo "$ ./allstar_gen.sh cnlohr allstarlist.txt"
+	echo "$ ./allstar_gen.sh tsoding allstarlist.txt"
 
 clobber : clean
 	rm -rf allstarlist.txt

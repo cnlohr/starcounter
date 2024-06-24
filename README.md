@@ -28,8 +28,9 @@ Usage:
 
 ```
 make clobber
-./allstar_gen.sh {username}
-./allstar_gen.sh {username}
+rm allstarlist.txt
+./allstar_gen.sh {username} allstarlist.txt
+./allstar_gen.sh {username} allstarlist.txt
 make video.mp4
 ```
 
@@ -45,3 +46,4 @@ If you wish to change the width/height, you can edit it in `starslidegen.c` here
 ```
 
 **NOTE**: Because we are using bmp's it's fast, but longer runs could use in upwards of 40GB of intermediate files.
+
